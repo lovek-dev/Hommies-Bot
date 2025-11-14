@@ -1,63 +1,82 @@
-const Discord = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('announce')
+    .setDescription('Send an announcement to a channel')
+    .addChannelOption(option =>
+      option.setName('channel')
+        .setDescription('The channel to send the announcement to')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName('title')
+        .setDescription('Title of the announcement')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName('message')
+        .setDescription('The announcement message')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName('color')
+        .setDescription('Embed color (e.g., #FF0000 or RED)')
+        .setRequired(false)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-  name: "announce",
+  async execute(interaction) {
+    const channel = interaction.options.getChannel('channel');
+    const title = interaction.options.getString('title');
+    const message = interaction.options.getString('message');
+    const color = interaction.options.getString('color') || '#0099ff';
 
-  description: "Make an Announcemnet in your Server",
-
-  userPerms: ["ManageMessages"],
-
-  botPerms: ["EmbedLinks", "ManageMessages"],
-
-  run: async (client, message, args) => {
-
-    const anchannel = message.mentions.channels.first();
-
-    if (!anchannel) {
-
-      return message.channel.send("`Usage: =announce <channel> <msg>`");
-
+    if (!channel.isTextBased()) {
+      return interaction.reply({
+        content: '❌ Please select a text channel!',
+        ephemeral: true,
+      });
     }
 
-    if (!args.slice(1).join(" ")) {
-
-      return message.channel.send(
-
-        "Please add some text to make an Announcement"
-
-      );
-
+    const botPermissions = channel.permissionsFor(interaction.guild.members.me);
+    if (!botPermissions.has(PermissionFlagsBits.SendMessages)) {
+      return interaction.reply({
+        content: `❌ I don't have permission to send messages in ${channel}!`,
+        ephemeral: true,
+      });
     }
 
-    let embed = new Discord.EmbedBuilder()
+    if (!botPermissions.has(PermissionFlagsBits.EmbedLinks)) {
+      return interaction.reply({
+        content: `❌ I don't have permission to embed links in ${channel}!`,
+        ephemeral: true,
+      });
+    }
 
-      .setTitle(`<:ann:748176925792665721> New Server Announcement`)
+    try {
+      const colorValue = color.startsWith('#') ? parseInt(color.slice(1), 16) : color.toUpperCase();
 
-      .setDescription(args.slice(1).join(" "), {
+      const embed = new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(message)
+        .setColor(colorValue)
+        .setTimestamp()
+        .setFooter({ text: `Announced by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
-        allowedMentions: { parse: ["users"] },
+      await channel.send({ embeds: [embed] });
 
-      })
+      await interaction.reply({
+        content: `✅ Announcement sent successfully to ${channel}!`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error('Announce command error:', error);
 
-      .setColor("Random")
-
-      .setFooter(`Announcement by ${message.author.username}`);
-
-    anchannel.send({ embeds: [embed] });
-
-    let anembed = new Discord.EmbedBuilder()
-
-      .setTitle("Done!")
-
-      .setDescription(`Announcement has been sent to ${anchannel}`)
-
-      .setColor("Random");
-
-    message.channel.send({ embeds: [anembed] });
-
-    message.delete();
-
+      await interaction.reply({
+        content: `❌ Failed to send announcement: ${error.message}`,
+        ephemeral: true,
+      });
+    }
   },
-
 };
